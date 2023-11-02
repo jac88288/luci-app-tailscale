@@ -5,10 +5,10 @@ function index()
 	if not nixio.fs.access("/etc/config/tailscaler") then
         return
     end
-	entry({"admin", "services", "tailscaler"},				call("tailscale_template"), _("Tailscale"), 21).dependent = true
-	entry({"admin", "services", "tailscaler", "config"}, 	call("tailscale_config"))
-	entry({"admin", "services", "tailscaler", "status"}, 	call("tailscale_status"))
-	entry({"admin", "services", "tailscaler", "logout"}, 	call("tailscale_logout"))
+	entry({"admin", "vpn", "tailscaler"},				call("tailscale_template"), _("Tailscale"), 21).dependent = true
+	entry({"admin", "vpn", "tailscaler", "config"}, 	call("tailscale_config"))
+	entry({"admin", "vpn", "tailscaler", "status"}, 	call("tailscale_status"))
+	entry({"admin", "vpn", "tailscaler", "logout"}, 	call("tailscale_logout"))
 end
 
 function tailscale_template()
