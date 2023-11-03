@@ -12,3 +12,7 @@ https://openwrt.org/docs/guide-user/services/vpn/tailscale/start 的调用
 ```
     /etc/init.d/tailscaler stop
 ```
+
+
+
+更改应用界面服务到VPN菜单里
