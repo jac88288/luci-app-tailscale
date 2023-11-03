@@ -1,4 +1,4 @@
-# openwrt-tailscale
+OpenWrt-luci-app-tailscale
 github action build IPK
 
 https://openwrt.org/docs/guide-user/services/vpn/tailscale/start 的调用
