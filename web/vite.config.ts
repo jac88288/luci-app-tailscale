@@ -19,7 +19,7 @@ export default defineConfig({
     server: {
         proxy: {
             '/cgi-bin': {
-                target: "http://192.168.100.1",
+                target: "http://192.168.2.1",
                 changeOrigin: false,
                 ws: true,
             },
