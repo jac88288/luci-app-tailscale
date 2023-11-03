@@ -137,7 +137,7 @@
 </template>
 <script setup lang="ts">
 import { ref } from 'vue';
-const BASEURL = "/cgi-bin/luci/admin/services/tailscaler"
+const BASEURL = "/cgi-bin/luci/admin/vpn/tailscaler"
 const loading = ref(true)
 const disabled = ref(false)
 const config = ref<ResponseConfig>({})
