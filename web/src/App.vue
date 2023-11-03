@@ -92,7 +92,7 @@
                                 v-model.trim="config.advertiseRoutes">
                         </div>
                         <div class="cbi-value-description">
-                            允许被访问的网段 <code>192.168.100.0/24</code>
+                            允许被访问的网段 <code>192.168.2.0/24</code>
                         </div>
                     </div>
                 </div>
