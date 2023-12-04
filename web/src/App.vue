@@ -4,7 +4,7 @@
         <h2>Tailscale</h2>
         <div class="cbi-map-descr">
             Tailscale 连接您的设备，以便轻松访问远程资源。<br>
-            详情请查看 <a href="https://tailscale.com" target="_blank">tailscale</a>
+            详情请查看 <a href="https://login.tailscale.com/admin/machines" target="_blank">tailscale</a>
         </div>
         <!--  -->
         <div class="cbi-section">
