@@ -145,8 +145,8 @@ jobs:
           make -j16 V=s package/${IPK_NAME}/compile
 
       # 提交下载
-	  - name: Upload bin directory
-        uses: softprops/action-gh-release@main
+      - name: Upload bin directory
+        uses: softprops/action-gh-release@v1
         with:
           name: ${{ env.SDK_ARCH }}
           path: ${{ env.SDK_NAME }}/bin/packages/${{ env.SDK_ARCH }}
