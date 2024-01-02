@@ -145,8 +145,11 @@ jobs:
           make -j16 V=s package/${IPK_NAME}/compile
 
       # 提交下载
-      - name: Upload bin directory
-        uses: actions/upload-artifact@main
+      - name: Upload Tailscale App (master) ipks to release
+        uses: softprops/action-gh-release@v1
+        if: steps.compile.outputs.status == 'success'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          name: ${{ env.SDK_ARCH }}
-          path: ${{ env.SDK_NAME }}/bin/packages/${{ env.SDK_ARCH }}
+          tag_name: ${{needs.job_check.outputs.tailscale_version}}
+          files: ${{ env.FIRMWARE }}/base/luci-app*.ipk
