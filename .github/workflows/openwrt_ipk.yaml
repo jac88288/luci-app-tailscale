@@ -146,7 +146,7 @@ jobs:
 
       # 提交下载
       - name: Upload bin directory
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@main
         with:
           name: ${{ env.SDK_ARCH }}
           path: ${{ env.SDK_NAME }}/bin/packages/${{ env.SDK_ARCH }}
