@@ -17,56 +17,42 @@ env:
 
 
 jobs:
-  matrix:
+  job_check:
+    if: github.repository == ${{ github.repository }}
+    name: Check Version
     runs-on: ubuntu-latest
     outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      alpha_version: ${{ steps.check_version.outputs.latest_version }}
+      has_update: ${{ steps.check_version.outputs.has_update }}
     steps:
-      - name: Detect build target
-        id: set-matrix
+      - name: Checkout
+        uses: actions/checkout@main
+        with:
+          fetch-depth: 0
+          ref: 'main'
+
+      - name: Check version
+        id: check_version
         env:
-          MATRIX_TARGET: ${{ github.event.inputs.target }}
+          url_release: https://api.github.com/repos/${{ github.repository }}/releases/latest
         run: |
-          if [ "x${MATRIX_TARGET}" = "x" -o "x${MATRIX_TARGET}" = "xall" ]; then \
-            echo "matrix={\"target\":[\"arm64\", \"x64\", \"mipsel\"]}" >> $GITHUB_OUTPUT; \
-          else \
-            targets=""; \
-            for target in ${MATRIX_TARGET}; do \
-              targets="$targets, \"$target\"";
-            done; \
-            echo "matrix={\"target\":[${targets#, }]}" >> $GITHUB_OUTPUT; \
-          fi
-  build:
-    needs: matrix
-    runs-on: ubuntu-latest
-    name: Build IPKs for ${{ matrix.target }}
-    strategy:
-      matrix: ${{fromJson(needs.matrix.outputs.matrix)}}
-    steps:
-      # 拉取项目代码
-      - name: Checkout the code
-        uses: actions/checkout@v3
+          latest_version=$(grep -oP 'PKG_VERSION:=\K.*' Makefile | sed 's/^/v/')
+          latest_release=$(wget -qO- -t1 -T2 ${{env.url_release}} | awk -F '"' '/tag_name/{print $4}')
+          has_update=$([ "${latest_version}" != "${latest_release}" ] && echo true || echo false)
+          echo "latest_version=${latest_version}" >> $GITHUB_OUTPUT
+          echo "has_update=${has_update}" >> $GITHUB_OUTPUT
+          echo "latest_version: ${latest_version}"
+          echo "latest_release: ${latest_release}"
+          echo "has_update: ${has_update}"
 
-      # 安装 nodejs
-      # https://github.com/marketplace/actions/setup-node-js-environment
-      - name: Setup Nodejs
-        uses: actions/setup-node@v3
-
-      # 安装 pnpm
-      - run: |
-          npm install pnpm -g
-
-      # 打包 web 项目
-      - run: |
-          cd web
-          pnpm install
-          pnpm run build
-
-      # 复制 web至 luci
-      - run: |
-          mkdir ${IPK_NAME}/htdocs
-          cp -r web/dist/luci-static ${IPK_NAME}/htdocs
-
+      - name: Generate new tag & release
+        if: steps.check_version.outputs.has_update == 'true'
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          name: Tailscale app | For OpenWrt
+          tag_name: ${{steps.check_version.outputs.latest_version}}
 
 
   job_build_tailscale:
