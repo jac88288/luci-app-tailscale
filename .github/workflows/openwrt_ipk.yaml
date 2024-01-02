@@ -1,24 +1,21 @@
-# 工作流程的名字
-# https://github.com/subosito/flutter-action
-name: build Openwrt Ipk
+name: "Auto compile with OpenWrt SDK"
 on:
+  repository_dispatch:
   workflow_dispatch:
     inputs:
-      version:
-        description: "ipk version"
-        required: true
-        default: "0.0.1"
-      target:
-        description: 'build target ["arm64", "x64", "mipsel"]'
+      ssh:
+        description: 'SSH connection to Actions'
         required: true
         default: "x64"
+  push:
+    branches:
+      - 'main'
+    paths:
+      - 'luci-app-tailscale/Makefile'
 env:
-  TZ: Asia/Shanghai
-  IPK_NAME: luci-app-tailscaler
+  TZ: Asia/Jakarta
 
-permissions:
-  contents: write
-# 这个工作流程需要执行的任务
+
 jobs:
   matrix:
     runs-on: ubuntu-latest
@@ -70,86 +67,77 @@ jobs:
           mkdir ${IPK_NAME}/htdocs
           cp -r web/dist/luci-static ${IPK_NAME}/htdocs
 
-      # 写入版本号
-      - run: |
-          sed -i  's/PKG_VERSION:=\(.*\)/PKG_VERSION:=${{ inputs.version }}/g' ${IPK_NAME}/Makefile
 
-      - name: Import Env
-        env:
-          MATRIX_TARGET: ${{ matrix.target }}
-        run: cat .github/workflows/${MATRIX_TARGET}.env >> "$GITHUB_ENV"
 
-      - name: Initialization environment
-        env:
-          DEBIAN_FRONTEND: noninteractive
+  job_build_tailscale:
+    name: Build Tailscale app (main)
+    needs: job_check
+    if: needs.job_check.outputs.has_update == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install packages
         run: |
-          sudo swapoff -a || true
-          sudo rm -rf /swapfile /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          echo "Install packages"
           sudo -E apt-get -qq update
-          sudo -E apt-get -qq install build-essential asciidoc binutils bzip2 gawk gettext git libncurses5-dev libz-dev patch unzip zlib1g-dev libc6-dev-i386 subversion flex uglifyjs gcc-multilib g++-multilib p7zip p7zip-full msmtp libssl-dev texinfo libglib2.0-dev xmlto qemu-utils upx libelf-dev autoconf automake libtool autopoint device-tree-compiler antlr3 gperf rsync
+          sudo -E apt-get -qq install build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev file wget
           sudo -E apt-get -qq autoremove --purge
           sudo -E apt-get -qq clean
-          sudo timedatectl set-timezone "$TZ"
-          # curl -fsSL https://raw.githubusercontent.com/P3TERX/dotfiles/master/.bashrc >> ~/.bashrc
 
-      - name: Download SDK
-        run: wget ${SDK_URL}${SDK_NAME}.tar.xz
+      - name: Cache openwrt SDK
+        id: cache-sdk
+        uses: actions/cache@v3
+        with:
+          path: sdk
+          key: openwrt-sdk-21.02-x86-64
 
-      - name: Unpack SDK
+      - name: Initialization environment
+        if: steps.cache-sdk.outputs.cache-hit != 'true'
+        env:
+          url_sdk: https://archive.openwrt.org/releases/21.02.5/targets/x86/64/openwrt-sdk-21.02.5-x86-64_gcc-8.4.0_musl.Linux-x86_64.tar.xz
         run: |
-          mkdir ~/openwrt-sdk
-          tar -xJf `pwd`/${SDK_NAME}.tar.xz --strip-components=1 -C ~/openwrt-sdk
-          ln -s ${HOME}/openwrt-sdk ${SDK_NAME}
-
-      - name: Clean Code
-        run: |
-          rm -f ${SDK_NAME}/package/linux/modules/*
-          rm -f ${SDK_NAME}/package/kernel/linux/modules/*
-          grep -lFr '$(call KernelPackage,' ${SDK_NAME}/package/linux | xargs -rn1 sed -i 's/ FILES:=/ XFILES:=/g' || true
-          grep -lFr '$(call KernelPackage,' ${SDK_NAME}/package/kernel | xargs -rn1 sed -i 's/ FILES:=/ XFILES:=/g' || true
-          find ${SDK_NAME}/target/linux -name 'modules.mk' | xargs -rn1 sed -i 's/ FILES:=/ XFILES:=/g' || true
-          grep 'src-git base ' ${SDK_NAME}/feeds.conf.default > ${SDK_NAME}/feeds.conf
-          grep 'src-git luci ' ${SDK_NAME}/feeds.conf.default >> ${SDK_NAME}/feeds.conf
-
-      - name: Write Config
-        run: |
-          cat <<EOF >${SDK_NAME}/.config
-          # CONFIG_SIGNED_PACKAGES is not set
-          CONFIG_LUCI_LANG_zh_Hans=y
-          CONFIG_LUCI_LANG_zh-cn=y
-          EOF
-
-      - name: Defconfig
-        id: defconfig
-        run: |
-          cd ~/openwrt-sdk
-          make defconfig
-          sed -i 's/^CONFIG_PACKAGE_\(.*\)=m$/# CONFIG_PACKAGE_\1 is not set/' .config
-          grep '^CONFIG_PACKAGE_' .config
-          echo "status=success" >> $GITHUB_OUTPUT
-
-      - name: "Install"
-        run: |
-          cd ~/openwrt-sdk
+          wget ${{ env.url_sdk }}
+          file_name=$(echo ${{env.url_sdk}} | awk -F/ '{print $NF}')
+          mkdir sdk && tar -xJf $file_name -C ./sdk --strip-components=1
+          cd sdk  
+          echo "src-git base https://github.com/openwrt/openwrt.git;openwrt-21.02" > feeds.conf
+          echo "src-git-full packages https://github.com/openwrt/packages.git;openwrt-21.02" >> feeds.conf
+          echo "src-git-full luci https://git.openwrt.org/project/luci.git;openwrt-21.02" >> feeds.conf
+          echo "src-git-full routing https://git.openwrt.org/feed/routing.git;openwrt-21.02"  >> feeds.conf
+          git clone -b main https://github.com/${{ github.repository }}.git package/downloads/luci-theme-alpha
           ./scripts/feeds update -a
-          ./scripts/feeds install -a
+          echo "CONFIG_PACKAGE_luci-app-tailscale=m" > .config
+          ./scripts/feeds install -d n luci-app-tailscale
+          make download -j8
 
-      - name: Copy Package
+      - name: Configure Tailscale app (main)
         run: |
-          cp -r ./${IPK_NAME}/ ~/openwrt-sdk/package
+          cd sdk
+          ./scripts/feeds install luci-app-tailscale
+          echo "CONFIG_ALL_NONSHARED=n" > .config
+          echo "CONFIG_ALL_KMODS=n" >> .config
+          echo "CONFIG_ALL=n" >> .config
+          echo "CONFIG_AUTOREMOVE=n" >> .config
+          echo "CONFIG_LUCI_LANG_zh_Hans=n" >> .config
+          echo "CONFIG_PACKAGE_luci-app-tailscale=m" >> .config
+          make defconfig
 
-      - name: Build IPK
+      - name: Compile Tailscale app (main)
+        id: compile
         run: |
-          cd ~/openwrt-sdk
-          chmod 755 -R ./package/${IPK_NAME}
-          make -j16 V=s package/${IPK_NAME}/compile
+          cd sdk
+          echo "make package/luci-app-tailscale/{clean,compile} -j$(nproc)"
+          make package/luci-app-tailscale/{clean,compile} -j$(nproc)
+          mv bin/packages/x86_64/base/ ../
+          rm .config .config.old
+          cd ..
+          echo "status=success" >> $GITHUB_OUTPUT
+          echo "FIRMWARE=$PWD" >> $GITHUB_ENV
 
-      # 提交下载
-      - name: Upload Tailscale App (master) ipks to release
+      - name: Upload Tailscale app (main) ipks to release
         uses: softprops/action-gh-release@v1
         if: steps.compile.outputs.status == 'success'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{needs.job_check.outputs.pkg_version}}
+          tag_name: ${{needs.job_check.outputs.alpha_version}}
           files: ${{ env.FIRMWARE }}/base/luci-app*.ipk
